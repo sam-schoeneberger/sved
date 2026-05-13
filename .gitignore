@@ -152,3 +152,4 @@ dmypy.json
 # Local adds
 testing/
 config/config.json
+encoding-plans.md
