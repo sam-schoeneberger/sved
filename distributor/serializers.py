@@ -13,6 +13,7 @@ class FileSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "size",
+            "codec",
             "duration",
             "frame_rate",
             "frames",

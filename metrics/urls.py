@@ -35,7 +35,9 @@ browser_patterns = [
     path("<int:task_pk>/compare/<int:frame_number>/", views.task_compare_specific, name="task-compare-specific"),
     path("<int:task_pk>/compare/worst/", views.task_compare_worst, name="task-compare-worst"),
     path("in-progress/", views.tasks_incomplete, name="tasks-incomplete"),
-    path("completed/", views.tasks_completed, name="tasks-completed")
+    path("completed/", views.tasks_completed, name="tasks-completed"),
+    path("completed/details/", views.tasks_completed_task_detail, name="tasks-completed-details"),
+    path("completed/statistics/", views.tasks_completed_statistics, name="tasks-completed-statistics")
 ]
 
 urlpatterns = [

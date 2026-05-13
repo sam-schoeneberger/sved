@@ -38,7 +38,8 @@ def _queue_task(task: metrics.models.MetricTask, is_secure: bool = False) -> Non
         "url": task.get_metrics_task_url(is_secure=is_secure)
     }
 
-    log.info("Queuing Metrics Task [{}] - [{}]".format(task.pk, task.source_file.name))
+    log.info(f"Queuing Metrics Task [{task.pk}] - [{task.source_file.name}]")
+    log.debug(f"Message Data: [{message_data}]")
     rabbit_handler.send_message(message_data)
 
     task.status = task.TaskStatus.QUEUED
@@ -179,12 +180,31 @@ def tasks_incomplete(request):
 
 def tasks_completed(request):
     # TODO: Fix the template and make this show task information
-    # Then work on the task detail page so you can see more detailed information
     completed_tasks = metrics.models.MetricTask.objects.filter(status=metrics.models.MetricTask.TaskStatus.COMPLETE)
     context = {
         "completed_tasks": completed_tasks,
     }
     return render(request, "metrics/tasks/completed.html", context)
+
+
+def tasks_completed_statistics(request):
+    # TODO: this has the same TODO as tasks_completed
+    completed_tasks = metrics.models.MetricTask.objects.filter(status=metrics.models.MetricTask.TaskStatus.COMPLETE)
+    context = {
+        "completed_tasks": completed_tasks,
+    }
+
+    return render(request, "metrics/tasks/completed_statistics.html", context)
+
+
+def tasks_completed_task_detail(request):
+    # TODO: this has the same TODO as tasks_completed
+    completed_tasks = metrics.models.MetricTask.objects.filter(status=metrics.models.MetricTask.TaskStatus.COMPLETE)
+    context = {
+        "completed_tasks": completed_tasks,
+    }
+
+    return render(request, "metrics/tasks/completed_details.html", context)
 
 
 def task_detail(request, task_pk: int):

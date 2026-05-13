@@ -27,6 +27,7 @@ class File(models.Model):
     name = models.CharField(max_length=256)
     directory = models.CharField(max_length=256)
     size = models.IntegerField(null=True)
+    codec = models.TextField(null=False)
     duration = models.DecimalField(max_digits=9, decimal_places=3, null=True)
     frame_rate = models.DecimalField(max_digits=6, decimal_places=3, null=True)
     frames = models.IntegerField(null=True)

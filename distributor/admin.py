@@ -8,7 +8,7 @@ import distributor.models
 ########################################################################################################################
 class FileAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "name", "directory", "size", "duration", "frame_rate", "frames"
+        "id", "name", "directory", "size", "codec", "duration", "frame_rate", "frames"
     )
     ordering = ("pk", )
 

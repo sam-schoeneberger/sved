@@ -109,6 +109,9 @@ def _run_ffmpeg_command(command: str, frame_count: int, file_name: str,
             break
 
         # Sending heartbeats while running long tasks
+        # TODO: Handle the case where rabbitmq is down when this is sent
+        # (Should be enough to just catch the pika.exceptions.ConnectionClosedByBroker exception
+        # maybe keep a counter and if it's down more than 60 times (i.e. 10 minutes), throw an error for real?
         if int(time.time()) % 10 == 0:
             callback_channel.connection.process_data_events()
 
@@ -291,8 +294,8 @@ def download_file(url: str, file_name: str) -> pathlib.Path:
     log.debug("Downloading file from [{}] to [{}]".format(url, local_file_path))
     local_file_path.parent.mkdir(exist_ok=True, parents=True)
 
-    # TODO: catch connection reset by peer error
-    # (triggered by restarting the webserver while a file is downloading)
+    # TODO: catch requests.exceptions.ConnectTimeout error
+    # raised when sved manager offline too long
     while True:
         try:
             with requests.get(url, stream=True, headers={"worker": _get_hostname()}) as response:
@@ -315,12 +318,14 @@ def download_file(url: str, file_name: str) -> pathlib.Path:
 
 
 def encode_file(input_file: pathlib.Path, profile: dict, detail_url: str,
-                callback_channel: pika.adapters.blocking_connection.BlockingChannel) -> (pathlib.Path, int, int):
-    crf = profile["encode_value"]
+                callback_channel: pika.adapters.blocking_connection.BlockingChannel) -> (pathlib.Path, str, int):
+    encode_type = profile["encode_type"]
+    encode_value = profile["encode_value"]
 
-    output_file = input_file.with_name("{}_compressed.mkv".format(input_file.stem))
+    output_file = input_file.with_name(f"{input_file.stem}_compressed.mkv")
 
     if profile["encode_type"] == "abr":
+        encode_value = ffmpeg.get_bitrate_for_scene(input_file)
         output_file = _encode_file_two_pass(
             input_file=input_file, output_file=output_file,
             detail_url=detail_url, profile=profile, callback_channel=callback_channel
@@ -328,7 +333,7 @@ def encode_file(input_file: pathlib.Path, profile: dict, detail_url: str,
     else:
         output_file = _encode_file_crf(
             input_file=input_file, output_file=output_file,
-            detail_url=detail_url, crf=crf, profile=profile, callback_channel=callback_channel
+            detail_url=detail_url, crf=encode_value, profile=profile, callback_channel=callback_channel
         )
 
     mkvtoolnix.add_media_statistics(output_file)
@@ -336,19 +341,21 @@ def encode_file(input_file: pathlib.Path, profile: dict, detail_url: str,
     while not compressed_file_passes_scene_rules:
         log.warning("Output does not pass scene rules")
         # TODO: send a request to the manager and track what encode we're on (e.g. attempt 3, attempt 4, etc.)
-        if crf == 24:
+        if encode_value == 24:
             log.debug("Reached max CRF of 24; Encoding using ABR 2 Pass")
+            encode_type = "abr"
+            encode_value = ffmpeg.get_bitrate_for_scene(input_file)
             output_file = _encode_file_two_pass(
                 input_file=input_file, output_file=output_file,
                 detail_url=detail_url, profile=profile, callback_channel=callback_channel
             )
             break
         else:
-            crf += 1
-            log.debug("Attempting an encode at [{}]".format(crf))
+            encode_value += 1
+            log.debug(f"Attempting an encode at [{encode_value}]")
             output_file = _encode_file_crf(
                 input_file=input_file, output_file=output_file,
-                detail_url=detail_url, crf=crf, profile=profile, callback_channel=callback_channel
+                detail_url=detail_url, crf=encode_value, profile=profile, callback_channel=callback_channel
             )
 
         mkvtoolnix.add_media_statistics(output_file)
@@ -357,10 +364,10 @@ def encode_file(input_file: pathlib.Path, profile: dict, detail_url: str,
     ffmpeg.delete_two_pass_logs(pathlib.Path.cwd())
     mkvtoolnix.add_media_statistics(output_file)
 
-    return output_file
+    return output_file, encode_type, encode_value
 
 
-def upload_file(url: str, file_path: pathlib.Path) -> None:
+def upload_file(url: str, file_path: pathlib.Path, encode_type: str, encode_value: int) -> None:
     log.info("Uploading [{}] to [{}]".format(str(file_path), url))
     headers = {
         "worker": _get_hostname(),
@@ -456,8 +463,10 @@ def callback(callback_channel: pika.adapters.blocking_connection.BlockingChannel
         profile["encode_type"] = task_information["encode_type"]
         profile["encode_value"] = task_information["encode_value"]
 
-        output_file = encode_file(input_file, profile, decoded_message["url"], callback_channel)
-        upload_file(task_information["encode_task_file_url_field"], output_file)
+        output_file, encode_type, encode_value = encode_file(
+            input_file, profile, decoded_message["url"], callback_channel
+        )
+        upload_file(task_information["encode_task_file_url_field"], output_file, encode_type, encode_value)
 
     elif task_type == "metrics":
         file_stem = task_information["source_file"]["name"].split(".mkv")[0]

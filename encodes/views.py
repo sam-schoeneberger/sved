@@ -90,6 +90,7 @@ def index(request):
                 except ValueError as ve:
                     if "is not a video" in str(ve):
                         log.warning(f"File [{future_to_file[future]}] could not be ingested: not a video")
+                        file_object = None
                     else:
                         raise ve
                 if file_object:
@@ -124,6 +125,7 @@ def ingest(request):
             compressed_file, created = distributor.models.File.objects.get_or_create(
                 name=file,
                 directory=str(output_directory.joinpath(profile.name)),
+                codec=profile.codec
             )
 
             task = encodes.models.EncodeTask.objects.create(

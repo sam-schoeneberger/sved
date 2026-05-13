@@ -1,3 +1,5 @@
+import datetime
+
 from django import template
 
 
@@ -23,6 +25,7 @@ def score_to_color_psnr(score: float) -> str:
     else:
         return "table-success"
 
+
 @register.filter
 def score_to_color_ms_ssim(score: float) -> str:
     if score > .99:
@@ -31,3 +34,8 @@ def score_to_color_ms_ssim(score: float) -> str:
         return "table-warning"
     else:
         return "table-danger"
+
+
+@register.filter
+def datetime_duration(start: datetime.datetime, end: datetime.datetime) -> str:
+    return str(end - start).split(".")[0]

@@ -44,12 +44,15 @@ def create_file(file_path: pathlib.Path) -> typing.Optional[distributor.models.F
     # and they have different stats.
     # However: don't do that.
 
-    # file = distributor.models.File.objects.filter(name=file_path.name, directory=str(file_path.parent)).first()
-    # if file:
-    #     return file
-
     mkvtoolnix.add_media_statistics_if_necessary(file_path)
     file_information = ffprobe.get_file_info(file_path)
+
+    file_matches = distributor.models.File.objects.filter(
+        name=file_path.name, directory=str(file_path.parent), codec=file_information.video_stream["codec_name"]
+    )
+    file = file_matches.first()
+    if file:
+        return file
 
     bits = int(file_information.format.get("size", 0)) * 8
     seconds = round(float(file_information.format.get("duration", 0)))
@@ -60,6 +63,7 @@ def create_file(file_path: pathlib.Path) -> typing.Optional[distributor.models.F
             name=file_path.name,
             directory=str(file_path.parent),
             size=int(file_information.format.get("size", 0)),
+            codec=file_information.video_stream["codec_name"],
             duration=file_information.duration,
             frame_rate=round(eval(file_information.video_stream["avg_frame_rate"]), 3),
             frames=file_information.frames,

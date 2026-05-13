@@ -1,0 +1,53 @@
+{% extends "bootstrap-base.html" %}
+
+{% load static %}
+{% load metrics_extras %}
+
+{% block title %}Completed Metrics Tasks{% endblock %}
+
+{% block navheader %}
+    {% include "metrics/navheader.html" %}
+{% endblock %}
+
+{% block main %}
+    <div class="border border-secondary border-2 m-2 p-2 collapse multi-collapse show" id="metrics_table">
+        <table class="table table-sm mb-1 table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Source File</th>
+                    <th scope="col">Compressed File</th>
+                    <th scope="col">Source Codec</th>
+                    <th scope="col">Compressed Codec</th>
+                    <th scope="col">NEG Mode</th>
+                    <th scope="col">Subsample Rate</th>
+                    <th scope="col">PSNR</th>
+                    <th scope="col">MS-SSIM</th>
+                    <th scope="col">Worker</th>
+                    <th scope="col">Processing Framerate</th>
+                    <th scope="col">Processing Rate</th>
+                    <th scope="col">Analyze Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in completed_tasks %}
+                    <tr id="{{ task.id }}_row">
+                        <td><code>{{ task.id }}</code></td>
+                        <td><code>{{ task.source_file.name }}</code></td>
+                        <td><code>{{ task.compressed_file.name }}</code></td>
+                        <td><code>{{ task.source_file.codec }}</code></td>
+                        <td><code>{{ task.compressed_file.codec }}</code></td>
+                        <td>{{ task.neg_mode }}</td>
+                        <td>{{ task.subsample_rate }}</td>
+                        <td>{{ task.psnr }}</td>
+                        <td>{{ task.ms_ssim }}</td>
+                        <td><code>{{ task.worker }}</code></td>
+                        <td>{{ task.processing_framerate }}</td>
+                        <td>{{ task.get_processing_rate }}</td>
+                        <td>{{ task.analyze_start_datetime|datetime_duration:task.analyze_end_datetime }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
