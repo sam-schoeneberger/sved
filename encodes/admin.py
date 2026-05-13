@@ -21,7 +21,7 @@ class ProfileAdmin(admin.ModelAdmin):
         "additional_arguments",
         "keep_original_main_audio"
     )
-    ordering = ("pk", )
+    ordering = ("name", )
 
 
 ########################################################################################################################

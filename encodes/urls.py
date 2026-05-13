@@ -11,6 +11,7 @@ urlpatterns = [
     path("ingest/", views.ingest, name="ingest"),
     path("tasks/complete/", views.completed_tasks, name="completed-tasks"),
     path("tasks/incomplete/", views.incomplete_tasks, name="incomplete-tasks"),
+    path("tasks/by-worker/", views.completed_tasks_by_worker, name="completed-tasks-by-worker"),
 
     # Normal - Profiles
     path("profiles/", views.profiles, name="profiles"),

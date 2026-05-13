@@ -1,5 +1,6 @@
 import json
 import pathlib
+import typing
 
 import django.core.handlers.wsgi
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
@@ -45,6 +46,7 @@ def _queue_task(task: metrics.models.MetricTask, is_secure: bool = False) -> Non
 
 
 def _get_lows(scores, low_type: str = "1%") -> float:
+    log.debug(f"Getting low scores for [{low_type}]")
     if low_type == "1%":
         frame_count = len(scores) // 100
     elif low_type == "0.1%":
@@ -52,10 +54,44 @@ def _get_lows(scores, low_type: str = "1%") -> float:
     else:
         raise ValueError("type should be \"1%\" or \"0.1%\"")
 
+    # log.debug(f"Number of frames: [{len(scores)}]")
+
     # Catching an error where we have less than 100 or 1000 frames
     frame_count = max(frame_count, 1)
+    # log.debug(f"Got frame count: [{frame_count}]")
 
-    return sum(sorted(scores)[0:frame_count]) / frame_count
+    # TODO: this freezes for desert rose, wtf
+    sorted_scores = sorted(scores)
+    # log.debug(f"Got sorted scores: [{sorted_scores}]")
+
+    low_scores = sorted_scores[0:frame_count]
+    # log.debug(f"Got low scores: [{low_scores}]")
+
+    score_sum = sum(low_scores)
+    # log.debug(f"Got score sum: [{score_sum}]")
+
+    low_score = score_sum / frame_count
+    # log.debug(f"Got low score: [{low_score}]")
+
+    return low_score
+
+
+def _get_reference_files() -> typing.List[distributor.models.File]:
+    reference_files = []
+    for file in distributor.models.File.objects.filter(directory__iexact=str(config.load_input_directory())):
+        if file.get_full_path().exists() and file.get_full_path().stat().st_size == file.size:
+            reference_files.append(file)
+
+    return reference_files
+
+
+def _get_compressed_files() -> typing.List[distributor.models.File]:
+    compressed_files = []
+    for file in distributor.models.File.objects.filter(directory__istartswith=str(config.load_output_directory())):
+        if file.get_full_path().exists() and file.get_full_path().stat().st_size == file.size:
+            compressed_files.append(file)
+
+    return compressed_files
 
 
 ########################################################################################################################
@@ -65,15 +101,8 @@ def index(request):
     distributor.utilities.scan_directory(config.load_input_directory())
     distributor.utilities.scan_directory(config.load_output_directory())
 
-    reference_files = []
-    for file in distributor.models.File.objects.filter(directory__iexact=str(config.load_input_directory())):
-        if file.get_full_path().exists() and file.get_full_path().stat().st_size == file.size:
-            reference_files.append(file)
-
-    compressed_files = []
-    for file in distributor.models.File.objects.filter(directory__istartswith=str(config.load_output_directory())):
-        if file.get_full_path().exists() and file.get_full_path().stat().st_size == file.size:
-            compressed_files.append(file)
+    reference_files = _get_reference_files()
+    compressed_files = _get_compressed_files()
 
     context = {
         "reference_files": sorted(reference_files, key=lambda k: k.name),
@@ -84,21 +113,42 @@ def index(request):
 
 def ingest(request):
     if request.method == "POST":
-        reference_file = get_object_or_404(distributor.models.File, pk=request.POST.get("reference_file"))
+        if "bulk-submit" in request.POST:
+            reference_files = _get_reference_files()
+            compressed_files = _get_compressed_files()
 
-        for file_id in request.POST.getlist("compressed_files"):
-            log.debug("Creating metric task for file [{}]".format(file_id))
-            compressed_file = get_object_or_404(distributor.models.File, pk=file_id)
+            for reference in reference_files:
+                for i in range(len(compressed_files)):
+                    if reference.name == compressed_files[i].name:
+                        task = metrics.models.MetricTask.objects.create(
+                            source_file=reference,
+                            compressed_file=compressed_files[i],
+                            psnr=request.POST.get("psnr_switch", "off").lower() == "on",
+                            ms_ssim=request.POST.get("ms_ssim_switch", "off").lower() == "on",
+                            vmaf=request.POST.get("vmaf_switch", "off").lower() == "on",
+                            subsample_rate=request.POST.get("subsample_rate", 1),
+                        )
+                        _queue_task(task)
+                        compressed_files.pop(i)
+                        break
 
-            task = metrics.models.MetricTask.objects.create(
-                source_file=reference_file,
-                compressed_file=compressed_file,
-                psnr=request.POST.get("psnr_switch", "off").lower() == "on",
-                ms_ssim=request.POST.get("ms_ssim_switch", "off").lower() == "on",
-                vmaf=request.POST.get("vmaf_switch", "off").lower() == "on",
-                subsample_rate=request.POST.get("subsample_rate", 1),
-            )
-            _queue_task(task)
+            return HttpResponseRedirect(reverse("metrics:tasks-incomplete"))
+        else:
+            reference_file = get_object_or_404(distributor.models.File, pk=request.POST.get("reference_file"))
+
+            for file_id in request.POST.getlist("compressed_files"):
+                log.debug("Creating metric task for file [{}]".format(file_id))
+                compressed_file = get_object_or_404(distributor.models.File, pk=file_id)
+
+                task = metrics.models.MetricTask.objects.create(
+                    source_file=reference_file,
+                    compressed_file=compressed_file,
+                    psnr=request.POST.get("psnr_switch", "off").lower() == "on",
+                    ms_ssim=request.POST.get("ms_ssim_switch", "off").lower() == "on",
+                    vmaf=request.POST.get("vmaf_switch", "off").lower() == "on",
+                    subsample_rate=request.POST.get("subsample_rate", 1),
+                )
+                _queue_task(task)
 
         return HttpResponseRedirect(reverse("metrics:tasks-incomplete"))
     else:
@@ -254,7 +304,7 @@ def api_report_data(request, task_pk: int):
         task.status = task.TaskStatus.UPLOADING
         task.save()
 
-        report_file = pathlib.Path("report-{}.json".format(task.pk))
+        report_file = pathlib.Path(f"report-{task.pk}.json")
         with report_file.open("wb") as f:
             f.write(uploaded_file.read())
 
@@ -273,16 +323,6 @@ def api_report_data(request, task_pk: int):
                 if task.ms_ssim:
                     ms_ssim_scores.append(frame["metrics"]["float_ms_ssim"])
 
-                # Creating Frame information
-                frame = metrics.models.Frame(
-                    task=task,
-                    frame_number=frame["frameNum"],
-                    psnr=frame["metrics"].get("psnr_y", None),
-                    ms_ssim=frame["metrics"].get("float_ms_ssim", None),
-                    vmaf=frame["metrics"].get("vmaf", None)
-                )
-                frame.save()
-
             log.debug("Creating pooled metrics information")
             pooled_vmaf_data = report_data["pooled_metrics"]["vmaf"]
             pooled_vmaf = metrics.models.PooledVMAF(
@@ -296,6 +336,7 @@ def api_report_data(request, task_pk: int):
             )
             pooled_vmaf.save()
             if task.psnr:
+                log.debug(f"Creating PSNR pooled metrics for [{task.pk}]")
                 pooled_psnr_data = report_data["pooled_metrics"]["psnr_y"]
                 pooled_psnr = metrics.models.PooledPSNR(
                     task=task,
@@ -307,18 +348,25 @@ def api_report_data(request, task_pk: int):
                     harmonic_mean=pooled_psnr_data["harmonic_mean"]
                 )
                 pooled_psnr.save()
+                log.debug(f"Created PSNR pooled metrics for [{task.pk}]")
             if task.ms_ssim:
+                log.debug(f"Creating MS SSIM pooled metrics for [{task.pk}]")
                 pooled_ms_ssim_data = report_data["pooled_metrics"]["float_ms_ssim"]
+                ms_ssim_low = _get_lows(ms_ssim_scores)
+                ms_ssim_point_one_percent_low = _get_lows(ms_ssim_scores, "0.1%")
                 pooled_ms_ssim = metrics.models.PooledMSSSIM(
                     task=task,
                     min=pooled_ms_ssim_data["min"],
-                    one_percent_min=_get_lows(ms_ssim_scores),
-                    point_one_percent_min=_get_lows(ms_ssim_scores, "0.1%"),
+                    one_percent_min=ms_ssim_low,
+                    point_one_percent_min=ms_ssim_point_one_percent_low,
                     max=pooled_ms_ssim_data["max"],
                     mean=pooled_ms_ssim_data["mean"],
                     harmonic_mean=pooled_ms_ssim_data["harmonic_mean"]
                 )
+                log.debug(f"Saving MS SSIM pooled metrics for [{task.pk}]")
                 pooled_ms_ssim.save()
+                log.debug(f"Created MS SSIM pooled metrics for [{task.pk}]")
+            log.debug(f"Metrics information for task [{task.pk}] saved")
 
         else:
             log.warning(

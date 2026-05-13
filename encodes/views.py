@@ -20,7 +20,6 @@ import encodes.serializers
 from utils import config
 from utils import ffprobe
 from utils import log
-from utils import mkvtoolnix
 from utils import rabbit_handler
 
 
@@ -94,7 +93,7 @@ def index(request):
 
         context = {
             "files": files_information,
-            "profiles": encodes.models.Profile.objects.all()
+            "profiles": encodes.models.Profile.objects.all().order_by("name")
         }
         return render(request, "encodes/management.html", context)
     else:
@@ -136,29 +135,56 @@ def ingest(request):
 
 
 def completed_tasks(request):
-    # TODO: benchmark current implementation vs. task query per profile
     relevant_tasks = encodes.models.EncodeTask.objects.filter(status=encodes.models.EncodeTask.TaskStatus.COMPLETE)
-    all_profiles = encodes.models.Profile.objects.all()
+    all_profiles = encodes.models.Profile.objects.all().order_by("name")
     tasks_by_profile = {x.name: {} for x in all_profiles}
 
     for profile in all_profiles:
         profile_information: dict = {
             "id": profile.pk,
-            "jobs": [x for x in relevant_tasks if x.profile.pk == profile.pk],
+            "tasks": [x for x in relevant_tasks if x.profile.pk == profile.pk],
         }
 
-        if len(profile_information["jobs"]) > 0:
-            encode_rates = [x.encode_framerate for x in profile_information.get("jobs", [])]
+        if len(profile_information["tasks"]) > 0:
+            encode_rates = [x.encode_framerate for x in profile_information["tasks"]]
             profile_information["stats"] = {
-                "average_fps": round(sum(encode_rates) / len(profile_information["jobs"]), 2),
-                "completed_jobs": len(profile_information["jobs"]),
+                "average_fps": round(sum(encode_rates) / len(profile_information["tasks"]), 2),
+                "completed_tasks": len(profile_information["tasks"]),
             }
 
         tasks_by_profile[profile.name] = profile_information
 
     context = {
-        "jobs_complete": tasks_by_profile,
+        "tasks_complete": tasks_by_profile,
         "profile_tables": " ".join(["table_{}".format(x.id) for x in all_profiles])
+    }
+    return render(request, "encodes/encodes/completed.html", context)
+
+
+def completed_tasks_by_worker(request):
+    # Not perfect, need to split into profiles for each worker, but it's a start!
+    relevant_tasks = encodes.models.EncodeTask.objects.filter(status=encodes.models.EncodeTask.TaskStatus.COMPLETE)
+    all_workers = encodes.models.EncodeTask.objects.order_by().values("worker").distinct()
+    tasks_by_worker = {x["worker"]: {} for x in all_workers}
+
+    for worker in all_workers:
+        worker_information: dict = {
+            "name": worker["worker"],
+            "tasks": [x for x in relevant_tasks if x.worker == worker["worker"]]
+        }
+
+        if len(worker_information["tasks"]) > 0:
+            encode_rates = [x.encode_framerate for x in worker_information["tasks"]]
+            worker_information["stats"] = {
+                "average_fps": round(sum(encode_rates) / len(worker_information["tasks"]), 2),
+                "completed_tasks": len(worker_information["tasks"])
+            }
+
+        tasks_by_worker[worker["worker"]] = worker_information
+
+    context = {
+        "tasks_complete": tasks_by_worker,
+        "profile_tables": " ".join(["table_{}".format(x["worker"]) for x in all_workers])
     }
     return render(request, "encodes/encodes/completed.html", context)
 
@@ -170,6 +196,7 @@ def incomplete_tasks(request):
     ]
     in_progress_statuses = [
         encodes.models.EncodeTask.TaskStatus.DOWNLOADING,
+        encodes.models.EncodeTask.TaskStatus.IN_PROGRESS_P1,
         encodes.models.EncodeTask.TaskStatus.IN_PROGRESS,
         encodes.models.EncodeTask.TaskStatus.UPLOADING
     ]
@@ -262,14 +289,17 @@ def api_task_detail(request, task_pk: int):
         task.encode_value = progress_data.get("encode_value", task.encode_value)
 
         if worker and worker != task.worker:
-            log.warning(
-                "Worker [{}] logged as processing [{}] but [{}] is sending updates".format(
-                    task.worker, task.id, worker
-                )
-            )
+            log.warning(f"Worker [{task.worker}] logged as processing [{task.id}] but [{worker}] is sending updates")
             task.worker = worker
 
-        if task.status != task.TaskStatus.IN_PROGRESS:
+        if progress_data.get("encode_type", task.encode_type) == "abr":
+            if "pass" in progress_data.keys():
+                encode_pass = progress_data["pass"]
+                if encode_pass == 1:
+                    task.status = task.TaskStatus.IN_PROGRESS_P1
+                else:
+                    task.status = task.TaskStatus.IN_PROGRESS
+        else:
             task.status = task.TaskStatus.IN_PROGRESS
 
         task.save()

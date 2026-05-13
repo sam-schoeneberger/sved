@@ -19,7 +19,7 @@
         </div>
     </div>
 
-    {% for profile, profile_information in jobs_complete.items %}
+    {% for profile, profile_information in tasks_complete.items %}
         <div class="d-flex">
             <div class="p-2 flex-shrink-1">
                 <img role="button" data-bs-toggle="collapse" data-bs-target="#table_{{ profile_information.id }}" aria-expanded="true" aria-controls="table_{{ profile_information.id }}" src="{% static 'encodes/collapse_small.png' %}" alt="Collapse button">
@@ -35,7 +35,7 @@
                 (but worth keeping it here if I one day decide the opposite)
             {% endcomment %}
 
-            {% comment %} Profile jobs {% endcomment %}
+            {% comment %} Profile tasks {% endcomment %}
             <table class="table table-sm mb-1">
                 <thead class="thead-dark">
                     <tr>
@@ -50,7 +50,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for task in profile_information.jobs %}
+                    {% for task in profile_information.tasks %}
                         <tr id="{{ task.id }}_row">
                             <td><code>{{ task.id }}</code></td>
                             <td><code>{{ task.source_file.name }}</code></td>

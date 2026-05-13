@@ -16,12 +16,6 @@ class MetricTaskAdmin(admin.ModelAdmin):
     )
 
 
-class FrameAdmin(admin.ModelAdmin):
-    list_display = (
-        "id", "task", "frame_number", "psnr", "ms_ssim", "vmaf"
-    )
-
-
 class PooledPSNRAdmin(admin.ModelAdmin):
     list_display = (
         "id", "task", "min", "max", "mean", "harmonic_mean"
@@ -44,7 +38,6 @@ class PooledVMAFAdmin(admin.ModelAdmin):
 # Default Admin models
 ########################################################################################################################
 admin.site.register(metrics.models.MetricTask, MetricTaskAdmin)
-admin.site.register(metrics.models.Frame, FrameAdmin)
 admin.site.register(metrics.models.PooledPSNR, PooledPSNRAdmin)
 admin.site.register(metrics.models.PooledMSSSIM, PooledMSSSIMAdmin)
 admin.site.register(metrics.models.PooledVMAF, PooledVMAFAdmin)

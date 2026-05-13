@@ -13,6 +13,9 @@ class FFProbeFile:
         command = "ffprobe -v error -show_streams -show_format -of json \"{}\"".format(file)
         code, out, err = subprocess_handler.run_command(command, print_output=False)
         if code != 0:
+            if "Permission denied" in "\n".join(err):
+                raise RuntimeError("ffprobe on [{}] failed, insufficient permissions".format(file.name))
+
             if out:
                 log.debug(out)
             if err:

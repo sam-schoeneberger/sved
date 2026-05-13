@@ -1,4 +1,3 @@
-import datetime
 import json
 
 from django.conf import settings
@@ -34,9 +33,10 @@ class EncodeTask(models.Model):
         CREATED = 0
         QUEUED = 1
         DOWNLOADING = 2
-        IN_PROGRESS = 3
-        UPLOADING = 4
-        COMPLETE = 5
+        IN_PROGRESS_P1 = 3, "In Progress (Pass 1)"
+        IN_PROGRESS = 4
+        UPLOADING = 5
+        COMPLETE = 6
 
     source_file = models.ForeignKey(
         'distributor.File',

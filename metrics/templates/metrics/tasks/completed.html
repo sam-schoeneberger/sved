@@ -14,7 +14,7 @@
         <table class="table table-sm mb-1 table-hover">
             <thead class="thead-dark">
                 <tr>
-                    <th colspan="9">Encoding Information</th>
+                    <th colspan="7">Encoding Information</th>
                     <th class="table-dark"></th>
                     <th colspan="5">VMAF</th>
                     <th class="table-dark"></th>
@@ -24,14 +24,12 @@
                 </tr>
                 <tr>
                     <th scope="col">ID</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Processing Framerate</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Compressed</th>
                     <th scope="col">Compressed Bitrate</th>
-                    <th scope="col">Compressed Size</th>
                     <th scope="col">% of Original File</th>
                     <th scope="col">NEG Mode</th>
                     <th scope="col">Subsample Rate</th>
-                    <th scope="col">Worker</th>
 
                     <th class="table-dark"></th>
 
@@ -63,13 +61,11 @@
                     <tr id="{{ task.id }}_row">
                         <td><code>{{ task.id }}</code></td>
                         <td><code>{{ task.source_file.name }}</code></td>
-                        <td>{{ task.processing_framerate }}</td>
+                        <td><code>{{ task.compressed_file.name }}</code></td>
                         <td>{{ task.compressed_file.get_bitrate_formatted }}</td>
-                        <td>{{ task.compressed_file.get_size_formatted }}</td>
                         <td>{% size_comparison task.source_file.size task.compressed_file.size %}%</td>
                         <td>{{ task.neg_mode }}</td>
                         <td>{{ task.subsample_rate }}</td>
-                        <td>{{ task.worker }}</td>
 
                         <td class="table-dark"></td>
 

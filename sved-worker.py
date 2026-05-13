@@ -74,7 +74,7 @@ def _get_temp_work_directory() -> pathlib.Path:
 
 def _run_ffmpeg_command(command: str, frame_count: int, file_name: str,
                         callback_channel: pika.adapters.blocking_connection.BlockingChannel,
-                        file_framerate: float = None, report_to_sved=False, detail_url: str = None) -> None:
+                        file_framerate: float = None, detail_url: str = None) -> None:
     """
     Run an ffmpeg command.  Basically just the subprocess_handler run_command function,
     but with additional logic for handling ffmpeg output & sending status updates to the SVED manager.
@@ -83,8 +83,7 @@ def _run_ffmpeg_command(command: str, frame_count: int, file_name: str,
     :param frame_count:
     :param file_name:
     :param callback_channel: channel to send messages back to rabbitmq, to keep it from thinking we've disconnected
-    :param file_framerate: optional parameter, provide this to calculate speed if ffmpeg returning 'N/A'
-    :param report_to_sved: flag, whether to send updates to sved (if detail_url is defined)
+    :param file_framerate: optional parameter, provide this to calculate speed if ffmpeg returns N/A
     :param detail_url: URL to send updates to if report_to_sved is True
     :return: None
     """
@@ -150,8 +149,9 @@ def _run_ffmpeg_command(command: str, frame_count: int, file_name: str,
                     else:
                         average_fps = 0
 
-                    #  Send progress to SVED
-                    if report_to_sved and detail_url:
+                    # Send progress to manager
+                    # TODO: Check return from manager to see if the task has been cancelled, then handle appropriately
+                    if detail_url:
                         data = {
                             "progress": output_step.get_frame_as_percentage(frame_count),
                             "fps": average_fps,
@@ -174,7 +174,7 @@ def _run_ffmpeg_command(command: str, frame_count: int, file_name: str,
     average_fps = sum([x.fps for x in output_steps]) / len(output_steps)
     log.debug("Execution time: [{}]s (average FPS: [{}])".format(round(time.time() - start_time, 2), average_fps))
 
-    if report_to_sved and detail_url:
+    if detail_url:
         data = {
             "fps": average_fps,
             "progress": 100.00,
@@ -210,7 +210,7 @@ def _encode_file_crf(input_file: pathlib.Path, output_file: pathlib.Path,
         _run_ffmpeg_command(
             encode_command, frame_count=file_info.frames, file_name=input_file.name,
             callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
-            report_to_sved=True, detail_url=detail_url
+            detail_url=detail_url
         )
     except Exception as e:
         input_file.unlink(missing_ok=True)
@@ -238,23 +238,34 @@ def _encode_file_two_pass(input_file: pathlib.Path, output_file: pathlib.Path,
     data = {
         "progress": 0.0,
         "encode_type": "abr",
-        "encode_value": file_bitrate
+        "encode_value": file_bitrate,
+        "pass": 1
     }
-    try:
-        requests.post(detail_url, data=json.dumps(data), headers={"worker": _get_hostname()})
-    except requests.exceptions.ConnectionError:
-        log.warning("Could not send completion update to manager")
 
     try:
+        requests.post(detail_url, data=json.dumps(data), headers={"worker": _get_hostname()})
         _run_ffmpeg_command(
             analyze_command, frame_count=file_info.frames, file_name=input_file.name,
             callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
-            report_to_sved=False
+            detail_url=detail_url
         )
+    except Exception as e:
+        input_file.unlink(missing_ok=True)
+        output_file.unlink(missing_ok=True)
+        raise e
+
+    data = {
+        "progress": 0.0,
+        "encode_type": "abr",
+        "encode_value": file_bitrate,
+        "pass": 2
+    }
+    try:
+        requests.post(detail_url, data=json.dumps(data), headers={"worker": _get_hostname()})
         _run_ffmpeg_command(
             encode_command, frame_count=file_info.frames, file_name=input_file.name,
             callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
-            report_to_sved=True, detail_url=detail_url
+            detail_url=detail_url
         )
     except Exception as e:
         input_file.unlink(missing_ok=True)
@@ -392,8 +403,7 @@ def calculate_metrics(reference_file: pathlib.Path, compressed_file: pathlib.Pat
         metrics_command,
         frame_count=file_info.frames, file_name=reference_file.name,
         callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
-
-        report_to_sved=True, detail_url=detail_url
+        detail_url=detail_url
     )
 
     report_file = _get_temp_work_directory().joinpath("report.json")
@@ -409,23 +419,30 @@ def callback(callback_channel: pika.adapters.blocking_connection.BlockingChannel
     decoded_message = json.loads(body.decode())
 
     task_type = decoded_message.get("type", "")
-    log.info("Task [{}] [{}] pulled from queue, beginning processing".format(task_type, decoded_message["id"]))
+    task_id = decoded_message["id"]
+    request_url = decoded_message["url"]
 
-    response = requests.get(decoded_message["url"])
+    log.info(f"Task [{task_type}] [{task_id}] pulled from queue, beginning processing")
+
+    response = requests.get(request_url)
     if response.status_code != 200:
-        log.warning(
-            "Received status code [{}] from request to [{}]".format(response.status_code, decoded_message["url"])
-        )
-        if response.text:
-            if "<html" in response.text:
-                html_file = _get_temp_work_directory().joinpath("error.html")
-                log.warning("Received HTML response, printing to [{}]".format(html_file))
-                html_file.parent.mkdir(exist_ok=True, parents=True)
-                with html_file.open("w") as f:
-                    f.write(response.text)
-            else:
-                log.debug("Response text: [{}]".format(response.text))
-        raise RuntimeError("Request to [{}] returned code [{}]".format(decoded_message["url"], response.status_code))
+        log.warning(f"Received status code [{response.status_code}] from request to [{request_url}]")
+        if response.status_code == 404:
+            log.warning(f"Task [{task_id}] doesn't exist")
+            log.debug(f"Acknowledging Task [{task_id}] to clear the queue")
+            callback_channel.basic_ack(delivery_tag=method.delivery_tag)
+            return
+        else:
+            if response.text:
+                if "<html" in response.text:
+                    html_file = _get_temp_work_directory().joinpath("error.html")
+                    log.warning(f"Received HTML response, printing to [{html_file}]")
+                    html_file.parent.mkdir(exist_ok=True, parents=True)
+                    with html_file.open("w") as f:
+                        f.write(response.text)
+                else:
+                    log.debug(f"Response text: [{response.text}]")
+            raise RuntimeError(f"Request to [{request_url}] returned code [{response.status_code}]")
 
     task_information = response.json()
 

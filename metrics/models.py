@@ -55,6 +55,9 @@ class MetricTask(models.Model):
     class Meta:
         verbose_name = "Metric Task"
 
+    def get_processing_rate(self, decimal_places: int = 2) -> float:
+        return round(float(self.processing_framerate) / float(self.source_file.frame_rate), decimal_places)
+
     def get_metrics_task_url(self, is_secure: bool = False) -> str:
         """
         Get the URL for detail about the metrics task
@@ -106,16 +109,6 @@ class MetricTask(models.Model):
             return "https://{}{}".format(request_host, reverse("metrics:api-task-compressed", args=(self.pk,)))
         else:
             return "http://{}{}".format(request_host, reverse("metrics:api-task-compressed", args=(self.pk,)))
-
-
-class Frame(models.Model):
-    task = models.ForeignKey(MetricTask, on_delete=models.CASCADE)
-    frame_number = models.IntegerField()
-
-    # Might not calculate these for each metric (though I can't imagine many scenarios where you wouldn't want to)
-    psnr = models.DecimalField(max_digits=8, decimal_places=6, null=True)     # 0.000000 ->  60.000000
-    ms_ssim = models.DecimalField(max_digits=7, decimal_places=6, null=True)  # 0.000000 ->   1.000000
-    vmaf = models.DecimalField(max_digits=9, decimal_places=6, null=True)     # 0.000000 -> 100.000000
 
 
 # So we can theoretically calculate all these once we have all the scores.

@@ -94,10 +94,44 @@
                     <div class="row"></div>
 
                     <div class="row">
-                        <input type="submit" class="btn btn-primary" value="Calculate">
+                        <input type="submit" class="btn btn-primary" name="default-submit" value="Calculate">
+                    </div>
+
+                    <div class="row"></div>
+
+                    <div class="row">
+                        <input type="submit" class="btn btn-primary" name="bulk-submit" value="Calculate for same names">
                     </div>
                 </div>
             </div>
         </form>
     </div>
+
+    <script type="text/javascript">
+        (function () { // encapsulating variables with IIFE
+            let lastcheck = null // no checkboxes clicked yet
+
+            // get desired checkboxes
+            let checkboxes = document.getElementsByName("compressed_files")
+
+            // loop over checkboxes to add event listener
+            Array.prototype.forEach.call(checkboxes, function (cbx, idx) {
+                cbx.addEventListener('click', function (evt) {
+
+                    // test for shift key, not first checkbox, and not same checkbox
+                    if ( evt.shiftKey && null !== lastcheck && idx !== lastcheck ) {
+
+                        // get range of checks between last-checkbox and shift-checkbox
+                        // Math.min/max does our sorting for us
+                        Array.prototype.slice.call(checkboxes, Math.min(lastcheck, idx), Math.max(lastcheck, idx))
+                            // and loop over each
+                            .forEach(function (ccbx) {
+                                ccbx.checked = true
+                        })
+                    }
+                    lastcheck = idx // set this checkbox as last-checked for later
+              })
+          })
+        }())
+    </script>
 {% endblock %}

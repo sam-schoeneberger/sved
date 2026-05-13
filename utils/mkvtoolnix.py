@@ -34,7 +34,6 @@ def add_media_statistics_if_necessary(file_path: pathlib.Path) -> None:
 
     statistics_present = bool(stream_to_check.get("tags", {}).get("_STATISTICS_WRITING_APP", None))
     if not statistics_present:
-        log.debug("File [{}] missing statistics from mkvtoolnix".format(file_path))
         add_media_statistics(file_path)
 
 
