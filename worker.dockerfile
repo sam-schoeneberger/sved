@@ -1,6 +1,6 @@
 # Deployment: docker run -it -d -e "HOSTNAME=$(cat /etc/hostname)" --name=sved_worker sved_worker:latest
 
-FROM python:3.9-alpine
+FROM python:3.12.7-alpine
 
 # Define working directory.
 WORKDIR /tmp
