@@ -313,67 +313,112 @@ def api_report_data(request, task_pk: int):
             report_data = json.loads(report_file.read_text())
 
             log.debug("Parsing frame metrics")
-            vmaf_scores = []
-            psnr_scores = []
-            ms_ssim_scores = []
-            for frame in report_data["frames"]:
-                vmaf_scores.append(frame["metrics"]["vmaf"])
-                if task.psnr:
-                    psnr_scores.append(frame["metrics"]["psnr_y"])
-                if task.ms_ssim:
-                    ms_ssim_scores.append(frame["metrics"]["float_ms_ssim"])
 
-            log.debug("Creating pooled metrics information")
-            pooled_vmaf_data = report_data["pooled_metrics"]["vmaf"]
-            pooled_vmaf = metrics.models.PooledVMAF(
-                task=task,
-                min=pooled_vmaf_data["min"],
-                one_percent_min=_get_lows(vmaf_scores),
-                point_one_percent_min=_get_lows(vmaf_scores, "0.1%"),
-                max=pooled_vmaf_data["max"],
-                mean=pooled_vmaf_data["mean"],
-                harmonic_mean=pooled_vmaf_data["harmonic_mean"]
-            )
-            pooled_vmaf.save()
-            if task.psnr:
-                log.debug(f"Creating PSNR pooled metrics for [{task.pk}]")
-                pooled_psnr_data = report_data["pooled_metrics"]["psnr_y"]
-                pooled_psnr = metrics.models.PooledPSNR(
+            # Old workers send the raw report from vmaf, newer versions send only pooled metrics
+            if report_data.get("is_pooled", False):
+                log.debug("Creating pooled metrics information")
+
+                pooled_vmaf_data = report_data["vmaf"]
+                pooled_vmaf = metrics.models.PooledVMAF(
                     task=task,
-                    min=pooled_psnr_data["min"],
-                    one_percent_min=_get_lows(psnr_scores),
-                    point_one_percent_min=_get_lows(psnr_scores, "0.1%"),
-                    max=pooled_psnr_data["max"],
-                    mean=pooled_psnr_data["mean"],
-                    harmonic_mean=pooled_psnr_data["harmonic_mean"]
+                    min=pooled_vmaf_data["min"],
+                    one_percent_min=pooled_vmaf_data["one_percent_min"],
+                    point_one_percent_min=pooled_vmaf_data["point_one_percent_min"],
+                    max=pooled_vmaf_data["max"],
+                    mean=pooled_vmaf_data["mean"],
+                    harmonic_mean=pooled_vmaf_data["harmonic_mean"]
                 )
-                pooled_psnr.save()
-                log.debug(f"Created PSNR pooled metrics for [{task.pk}]")
-            if task.ms_ssim:
-                log.debug(f"Creating MS SSIM pooled metrics for [{task.pk}]")
-                pooled_ms_ssim_data = report_data["pooled_metrics"]["float_ms_ssim"]
-                ms_ssim_low = _get_lows(ms_ssim_scores)
-                ms_ssim_point_one_percent_low = _get_lows(ms_ssim_scores, "0.1%")
-                pooled_ms_ssim = metrics.models.PooledMSSSIM(
+                pooled_vmaf.save()
+                if task.psnr:
+                    log.debug(f"Creating PSNR pooled metrics for [{task.pk}]")
+                    pooled_psnr_data = report_data["psnr"]
+                    pooled_psnr = metrics.models.PooledPSNR(
+                        task=task,
+                        min=pooled_psnr_data["min"],
+                        one_percent_min=pooled_psnr_data["one_percent_min"],
+                        point_one_percent_min=pooled_psnr_data["point_one_percent_min"],
+                        max=pooled_psnr_data["max"],
+                        mean=pooled_psnr_data["mean"],
+                        harmonic_mean=pooled_psnr_data["harmonic_mean"]
+                    )
+                    pooled_psnr.save()
+                    log.debug(f"Created PSNR pooled metrics for [{task.pk}]")
+                if task.ms_ssim:
+                    log.debug(f"Creating MS SSIM pooled metrics for [{task.pk}]")
+                    pooled_ms_ssim_data = report_data["ms_ssim"]
+                    pooled_ms_ssim = metrics.models.PooledMSSSIM(
+                        task=task,
+                        min=pooled_ms_ssim_data["min"],
+                        one_percent_min=pooled_ms_ssim_data["one_percent_min"],
+                        point_one_percent_min=pooled_ms_ssim_data["point_one_percent_min"],
+                        max=pooled_ms_ssim_data["max"],
+                        mean=pooled_ms_ssim_data["mean"],
+                        harmonic_mean=pooled_ms_ssim_data["harmonic_mean"]
+                    )
+                    log.debug(f"Saving MS SSIM pooled metrics for [{task.pk}]")
+                    pooled_ms_ssim.save()
+                    log.debug(f"Created MS SSIM pooled metrics for [{task.pk}]")
+            else:
+                vmaf_scores = []
+                psnr_scores = []
+                ms_ssim_scores = []
+                for frame in report_data["frames"]:
+                    vmaf_scores.append(frame["metrics"]["vmaf"])
+                    if task.psnr:
+                        psnr_scores.append(frame["metrics"]["psnr_y"])
+                    if task.ms_ssim:
+                        ms_ssim_scores.append(frame["metrics"]["float_ms_ssim"])
+
+                log.debug("Creating pooled metrics information")
+                pooled_vmaf_data = report_data["pooled_metrics"]["vmaf"]
+                pooled_vmaf = metrics.models.PooledVMAF(
                     task=task,
-                    min=pooled_ms_ssim_data["min"],
-                    one_percent_min=ms_ssim_low,
-                    point_one_percent_min=ms_ssim_point_one_percent_low,
-                    max=pooled_ms_ssim_data["max"],
-                    mean=pooled_ms_ssim_data["mean"],
-                    harmonic_mean=pooled_ms_ssim_data["harmonic_mean"]
+                    min=pooled_vmaf_data["min"],
+                    one_percent_min=_get_lows(vmaf_scores),
+                    point_one_percent_min=_get_lows(vmaf_scores, "0.1%"),
+                    max=pooled_vmaf_data["max"],
+                    mean=pooled_vmaf_data["mean"],
+                    harmonic_mean=pooled_vmaf_data["harmonic_mean"]
                 )
-                log.debug(f"Saving MS SSIM pooled metrics for [{task.pk}]")
-                pooled_ms_ssim.save()
-                log.debug(f"Created MS SSIM pooled metrics for [{task.pk}]")
+                pooled_vmaf.save()
+                if task.psnr:
+                    log.debug(f"Creating PSNR pooled metrics for [{task.pk}]")
+                    pooled_psnr_data = report_data["pooled_metrics"]["psnr_y"]
+                    pooled_psnr = metrics.models.PooledPSNR(
+                        task=task,
+                        min=pooled_psnr_data["min"],
+                        one_percent_min=_get_lows(psnr_scores),
+                        point_one_percent_min=_get_lows(psnr_scores, "0.1%"),
+                        max=pooled_psnr_data["max"],
+                        mean=pooled_psnr_data["mean"],
+                        harmonic_mean=pooled_psnr_data["harmonic_mean"]
+                    )
+                    pooled_psnr.save()
+                    log.debug(f"Created PSNR pooled metrics for [{task.pk}]")
+                if task.ms_ssim:
+                    log.debug(f"Creating MS SSIM pooled metrics for [{task.pk}]")
+                    pooled_ms_ssim_data = report_data["pooled_metrics"]["float_ms_ssim"]
+                    ms_ssim_low = _get_lows(ms_ssim_scores)
+                    ms_ssim_point_one_percent_low = _get_lows(ms_ssim_scores, "0.1%")
+                    pooled_ms_ssim = metrics.models.PooledMSSSIM(
+                        task=task,
+                        min=pooled_ms_ssim_data["min"],
+                        one_percent_min=ms_ssim_low,
+                        point_one_percent_min=ms_ssim_point_one_percent_low,
+                        max=pooled_ms_ssim_data["max"],
+                        mean=pooled_ms_ssim_data["mean"],
+                        harmonic_mean=pooled_ms_ssim_data["harmonic_mean"]
+                    )
+                    log.debug(f"Saving MS SSIM pooled metrics for [{task.pk}]")
+                    pooled_ms_ssim.save()
+                    log.debug(f"Created MS SSIM pooled metrics for [{task.pk}]")
+
             log.debug(f"Metrics information for task [{task.pk}] saved")
 
         else:
-            log.warning(
-                "Report for [{}] got wrong size file from worker: expected [{}] got [{}]".format(
-                    task.pk, expected_file_size, downloaded_size
-                )
-            )
+            message = f"Report for [{task.pk}] got wrong size file from worker:"
+            message += f" expected [{expected_file_size}] got [{downloaded_size}]"
+            log.warning(message)
             report_file.unlink(missing_ok=True)
 
             log.debug("Re-queueing metrics calculation for task [{}]".format(task.pk))

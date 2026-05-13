@@ -85,7 +85,13 @@ def index(request):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_file = {executor.submit(distributor.utilities.create_file, x): x for x in files_to_scan}
             for future in concurrent.futures.as_completed(future_to_file):
-                file_object = future.result()
+                try:
+                    file_object = future.result()
+                except ValueError as ve:
+                    if "is not a video" in str(ve):
+                        log.warning(f"File [{future_to_file[future]}] could not be ingested: not a video")
+                    else:
+                        raise ve
                 if file_object:
                     files_information.append(file_object)
 
@@ -184,9 +190,10 @@ def completed_tasks_by_worker(request):
 
     context = {
         "tasks_complete": tasks_by_worker,
-        "profile_tables": " ".join(["table_{}".format(x["worker"]) for x in all_workers])
+        "worker_tables": " ".join(["table_{}".format(x["worker"]) for x in all_workers])
     }
-    return render(request, "encodes/encodes/completed.html", context)
+
+    return render(request, "encodes/encodes/completed_by_worker.html", context)
 
 
 def incomplete_tasks(request):
@@ -214,7 +221,7 @@ def incomplete_tasks(request):
 
 def profiles(request):
     context = {
-        "profiles": encodes.models.Profile.objects.all()
+        "profiles": encodes.models.Profile.objects.all().order_by("name")
     }
     return render(request, "encodes/profiles.html", context)
 

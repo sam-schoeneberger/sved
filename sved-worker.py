@@ -477,7 +477,16 @@ def callback(callback_channel: pika.adapters.blocking_connection.BlockingChannel
             callback_channel=callback_channel
         )
 
-        upload_file(task_information["report_data_url"], metrics_report_file)
+        # Pooling metrics on the worker.  This can take some time and reduces load on the manager
+        log.debug("Creating pooled metrics report to upload")
+        pooled_metrics_data = metrics.get_metrics_from_report_file(metrics_report_file)
+        pooled_metrics_data["is_pooled"] = True
+        pooled_report_file = pathlib.Path("report_pooled.json")
+        pooled_report_file.write_text(json.dumps(pooled_metrics_data))
+
+        log.debug(f"Uploading pooled metrics file: [{pooled_report_file}]")
+
+        upload_file(task_information["report_data_url"], pooled_report_file)
 
         # TODO: upload worst frame(s) to manager
     else:

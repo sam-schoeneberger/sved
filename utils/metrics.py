@@ -199,8 +199,8 @@ def create_comparison_images(reference: pathlib.Path, compressed: pathlib.Path) 
     return images_folder
 
 
-# TODO: remove before public release, or make this better
 def _get_lows(scores, low_type: str = "1%") -> float:
+    log.debug(f"Getting low scores for [{low_type}]")
     if low_type == "1%":
         frame_count = len(scores) // 100
     elif low_type == "0.1%":
@@ -208,7 +208,25 @@ def _get_lows(scores, low_type: str = "1%") -> float:
     else:
         raise ValueError("type should be \"1%\" or \"0.1%\"")
 
-    return sum(sorted(scores)[0:frame_count]) / frame_count
+    # log.debug(f"Number of frames: [{len(scores)}]")
+
+    # Catching an error where we have less than 100 or 1000 frames
+    frame_count = max(frame_count, 1)
+    # log.debug(f"Got frame count: [{frame_count}]")
+
+    sorted_scores = sorted(scores)
+    # log.debug(f"Got sorted scores: [{sorted_scores}]")
+
+    low_scores = sorted_scores[0:frame_count]
+    # log.debug(f"Got low scores: [{low_scores}]")
+
+    score_sum = sum(low_scores)
+    # log.debug(f"Got score sum: [{score_sum}]")
+
+    low_score = score_sum / frame_count
+    # log.debug(f"Got low score: [{low_score}]")
+
+    return low_score
 
 
 def get_metrics_for_file(source_file_size: int, compressed_file: pathlib.Path, report_file: pathlib.Path):
@@ -270,3 +288,64 @@ def print_metrics(reports_directory: pathlib.Path, source_file_size: int):
     for report_file in [x for x in reports_directory.iterdir() if x.is_file() and x.name.endswith(".json")]:
         compressed_video_file = report_file.with_suffix(".mkv")
         get_metrics_for_file(source_file_size, compressed_video_file, report_file)
+
+
+def get_metrics_from_report_file(report_file: pathlib.Path) -> dict:
+    report_data = json.loads(report_file.read_text())
+
+    log.debug("Parsing frame metrics")
+    vmaf_scores = []
+    psnr_scores = []
+    ms_ssim_scores = []
+
+    has_psnr_scores = "psnr_y" in report_data["frames"][0]["metrics"].keys()
+    has_ms_ssim_scores = "float_ms_ssim" in report_data["frames"][0]["metrics"].keys()
+
+    for frame in report_data["frames"]:
+        vmaf_scores.append(frame["metrics"]["vmaf"])
+        if has_psnr_scores:
+            psnr_scores.append(frame["metrics"]["psnr_y"])
+        if has_ms_ssim_scores:
+            ms_ssim_scores.append(frame["metrics"]["float_ms_ssim"])
+
+    log.debug("Sorting scores, this may take a while")
+    vmaf_scores.sort()
+    psnr_scores.sort()
+    ms_ssim_scores.sort()
+
+    log.debug("Creating pooled metrics information")
+    report_score_data = dict()
+
+    pooled_vmaf_data = report_data["pooled_metrics"]["vmaf"]
+    report_score_data["vmaf"] = {
+        "min": pooled_vmaf_data["min"],
+        "max": pooled_vmaf_data["max"],
+        "mean": pooled_vmaf_data["mean"],
+        "harmonic_mean": pooled_vmaf_data["harmonic_mean"],
+        "one_percent_min": _get_lows(vmaf_scores),
+        "point_one_percent_min": _get_lows(vmaf_scores, "0.1%")
+    }
+
+    if has_psnr_scores:
+        pooled_psnr_data = report_data["pooled_metrics"]["psnr_y"]
+        report_score_data["psnr"] = {
+            "min": pooled_psnr_data["min"],
+            "max": pooled_psnr_data["max"],
+            "mean": pooled_psnr_data["mean"],
+            "harmonic_mean": pooled_psnr_data["harmonic_mean"],
+            "one_percent_min": _get_lows(psnr_scores),
+            "point_one_percent_min": _get_lows(psnr_scores, "0.1%")
+        }
+
+    if has_ms_ssim_scores:
+        pooled_ms_ssim_data = report_data["pooled_metrics"]["float_ms_ssim"]
+        report_score_data["ms_ssim"] = {
+            "min": pooled_ms_ssim_data["min"],
+            "max": pooled_ms_ssim_data["max"],
+            "mean": pooled_ms_ssim_data["mean"],
+            "harmonic_mean": pooled_ms_ssim_data["harmonic_mean"],
+            "one_percent_min": _get_lows(ms_ssim_scores),
+            "point_one_percent_min": _get_lows(ms_ssim_scores, "0.1%")
+        }
+
+    return report_score_data
