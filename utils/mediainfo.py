@@ -7,14 +7,14 @@ from utils import subprocess_handler
 
 class MediaInfoFile:
     def __init__(self, file: pathlib.Path):
-        command = "mediainfocli --Output=JSON \"{}\"".format(file)
+        command = f"mediainfocli --Output=JSON \"{file}\""
         code, out, err = subprocess_handler.run_command(command, print_output=False)
         if code != 0:
             if out:
                 log.debug(out)
             if err:
                 log.error(err)
-            raise RuntimeError("mediainfocli on [{]] returned code [{}]".format(file.name, code))
+            raise RuntimeError(f"mediainfocli on [{file.name}] returned code [{code}]")
 
         self.formatted_return = json.loads("\n".join(out))
 
@@ -29,7 +29,7 @@ class MediaInfoFile:
         real_video_streams = [x for x in video_streams if int(x.get("ID", -9999)) not in thumbnail_ids]
 
         if len(real_video_streams) != 1:
-            raise RuntimeError("Expected 1 video stream; got [{}]".format(len(real_video_streams)))
+            raise RuntimeError(f"Expected 1 video stream; got [{len(real_video_streams)}]")
         else:
             self.video_stream = real_video_streams[0]
 
@@ -41,19 +41,19 @@ class MediaInfoFile:
 
 
 def get_frame_count(file_path: pathlib.Path) -> int:
-    command = "mediainfocli --Inform=Video;%FrameCount% \"{}\"".format(file_path)
+    command = f"mediainfocli --Inform=Video;%FrameCount% \"{file_path}\""
     code, out, err = subprocess_handler.run_command(command, print_output=False)
     if code != 0:
         if out:
             log.debug(out)
         if err:
             log.error(err)
-        raise RuntimeError("mediainfocli on [{]] returned code [{}]".format(file_path.name, code))
+        raise RuntimeError(f"mediainfocli on [{file_path.name}] returned code [{code}]")
 
     try:
         return int(out[0])
     except IndexError:
-        raise RuntimeError("Could not get frame count from [{}]".format(file_path.name))
+        raise RuntimeError(f"Could not get frame count from [{file_path.name}]")
 
 
 def get_media_info(file_path: pathlib.Path) -> MediaInfoFile:
