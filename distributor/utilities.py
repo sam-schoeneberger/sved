@@ -11,10 +11,6 @@ from utils import log
 from utils import mkvtoolnix
 
 
-def _add_statistics_if_necessary():
-    pass
-
-
 def hash_file(file_path: pathlib.Path, block_size: int = 32768) -> str:
     """
     Get the SHA-1 hash of a file.  Picked this over others because it was the fastest of those tested
