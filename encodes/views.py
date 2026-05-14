@@ -56,55 +56,55 @@ def index(request):
     import_directory = config.load_input_directory()
     output_directory = config.load_output_directory()
 
-    if request.method == "GET":
-        log.info("Checking for pending files to encode")
-
-        # Get all files in the import directory, some of which may or may not be encoded or queued to encode.
-        import_files = [x for x in import_directory.iterdir() if x.is_file() and x.name.endswith("mkv")]
-
-        # Get all completed files in the output directory (which may not be in the DB)
-        output_files = [x for x in output_directory.rglob("*.mkv")]
-
-        # Get list of incomplete Jobs
-        query = ~Q(status=encodes.models.EncodeTask.TaskStatus.COMPLETE)
-        pending_task_files = [x.source_file.name for x in encodes.models.EncodeTask.objects.filter(query)]
-        log.debug("Found [{}] queued encode tasks in DB".format(len(pending_task_files)))
-
-        # Check if any pending jobs have the same file name as the scanned files
-        # If so, don't show them to the user.  If not, then show them to the user so they can scan
-        # We also ignore any files with the same name in the output directory, assuming they are the result
-        # of an earlier encode task.
-        files_to_scan = []
-        for file in import_files:
-            if file.name not in pending_task_files and file.name not in [x.name for x in output_files]:
-                files_to_scan.append(file)
-
-        log.debug("Scanning [{}] files not already queued".format(len(files_to_scan)))
-
-        files_information = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_file = {executor.submit(distributor.utilities.create_file, x): x for x in files_to_scan}
-            for future in concurrent.futures.as_completed(future_to_file):
-                try:
-                    file_object = future.result()
-                except ValueError as ve:
-                    if "is not a video" in str(ve):
-                        log.warning(f"File [{future_to_file[future]}] could not be ingested: not a video")
-                        file_object = None
-                    else:
-                        raise ve
-                if file_object:
-                    files_information.append(file_object)
-
-        files_information = sorted(files_information, key=lambda k: k.name)
-
-        context = {
-            "files": files_information,
-            "profiles": encodes.models.Profile.objects.all().order_by("name")
-        }
-        return render(request, "encodes/management.html", context)
-    else:
+    if request.method != "GET":
         return HttpResponse("This page only supports GET requests", status=405)
+
+    log.info("Checking for pending files to encode")
+
+    # Get all files in the import directory, some of which may or may not be encoded or queued to encode.
+    import_files = [x for x in import_directory.iterdir() if x.is_file() and x.name.endswith("mkv")]
+
+    # Get all completed files in the output directory (which may not be in the DB)
+    output_files = [x for x in output_directory.rglob("*.mkv")]
+
+    # Get list of incomplete Jobs
+    query = ~Q(status=encodes.models.EncodeTask.TaskStatus.COMPLETE)
+    pending_task_files = [x.source_file.name for x in encodes.models.EncodeTask.objects.filter(query)]
+    log.debug("Found [{}] queued encode tasks in DB".format(len(pending_task_files)))
+
+    # Check if any pending jobs have the same file name as the scanned files
+    # If so, don't show them to the user.  If not, then show them to the user so they can scan
+    # We also ignore any files with the same name in the output directory, assuming they are the result
+    # of an earlier encode task.
+    files_to_scan = []
+    for file in import_files:
+        if file.name not in pending_task_files and file.name not in [x.name for x in output_files]:
+            files_to_scan.append(file)
+
+    log.debug("Scanning [{}] files not already queued".format(len(files_to_scan)))
+
+    files_information = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_file = {executor.submit(distributor.utilities.create_file, x): x for x in files_to_scan}
+        for future in concurrent.futures.as_completed(future_to_file):
+            try:
+                file_object = future.result()
+            except ValueError as ve:
+                if "is not a video" in str(ve):
+                    log.warning(f"File [{future_to_file[future]}] could not be ingested: not a video")
+                    file_object = None
+                else:
+                    raise ve
+            if file_object:
+                files_information.append(file_object)
+
+    files_information = sorted(files_information, key=lambda k: k.name)
+
+    context = {
+        "files": files_information,
+        "profiles": encodes.models.Profile.objects.all().order_by("name")
+    }
+    return render(request, "encodes/management.html", context)
 
 
 def ingest(request):
