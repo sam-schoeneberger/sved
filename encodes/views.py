@@ -439,22 +439,45 @@ def api_task_file(request, task_pk: int):
 
 
 def api_profile_list(request):
-    # if request.method != "GET":
-    #     return JsonResponse(
-    #         {"error": "this endpoint only supports GET requests, not [{}]".format(request.method)},
-    #         json_dumps_params={"indent": 2},
-    #         status=405
-    #     )
-    #
-    # all_profiles = distributor.models.Profile.objects.all()
-    # serializer = distributor.serializers.ProfileSerializer(all_profiles, many=True)
-    # return JsonResponse(serializer.data, safe=False, json_dumps_params={"indent": 2})
-    pass
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": f"this endpoint only supports GET requests, not [{request.method}]"},
+            json_dumps_params={"indent": 2},
+            status=405
+        )
+
+    all_profiles = encodes.models.Profile.objects.all()
+    serializer = encodes.serializers.ProfileSerializer(all_profiles, many=True)
+    return JsonResponse(serializer.data, safe=False, json_dumps_params={"indent": 2})
 
 
-def api_profile_detail(request):
-    pass
+def api_profile_detail(request, profile_pk: int):
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": f"this endpoint only supports GET requests, not [{request.method}]"},
+            json_dumps_params={"indent": 2},
+            status=405
+        )
+
+    try:
+        requested_profile = encodes.models.Profile.objects.get(id=profile_pk)
+    except encodes.models.Profile.DoesNotExist:
+        return JsonResponse(
+            {"error": f"Profile with PK [{profile_pk}] does not exist"},
+            json_dumps_params={"indent": 2},
+            status=404
+        )
+
+    serializer = encodes.serializers.ProfileSerializer(requested_profile)
+    return JsonResponse(serializer.data, safe=False, json_dumps_params={"indent": 2})
 
 
-def api_profile_file_list(request):
-    pass
+def api_profile_file_list(request, profile_pk: int):
+    # Bit of a cheat, using the check functionality of api_profile_detail but not taking the response itself
+    api_profile_detail(request, profile_pk)
+
+    # Now we know the profile is legit, so we can search for encodes using it
+    profile_encode_tasks = encodes.models.EncodeTask.objects.filter(profile_id=profile_pk)
+
+    serializer = encodes.serializers.EncodeTaskSerializer(profile_encode_tasks, many=True)
+    return JsonResponse(serializer.data, safe=False, json_dumps_params={"indent": 2})
