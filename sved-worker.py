@@ -9,6 +9,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import typing
 
 from utils import config
 from utils import ffmpeg
@@ -238,33 +239,31 @@ def _encode_file_two_pass(input_file: pathlib.Path, output_file: pathlib.Path,
         preset=profile["encoder_preset"], tune=profile.get("encoder_tune", None)
     )
 
-    data = {
+    first_pass_command_data = {
         "progress": 0.0,
         "encode_type": "abr",
         "encode_value": file_bitrate,
         "pass": 1
     }
 
-    try:
-        requests.post(detail_url, data=json.dumps(data), headers={"worker": _get_hostname()})
-        _run_ffmpeg_command(
-            analyze_command, frame_count=file_info.frames, file_name=input_file.name,
-            callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
-            detail_url=detail_url
-        )
-    except Exception as e:
-        input_file.unlink(missing_ok=True)
-        output_file.unlink(missing_ok=True)
-        raise e
-
-    data = {
+    second_pass_command_data = {
         "progress": 0.0,
         "encode_type": "abr",
         "encode_value": file_bitrate,
         "pass": 2
     }
+
     try:
-        requests.post(detail_url, data=json.dumps(data), headers={"worker": _get_hostname()})
+        # First pass
+        requests.post(detail_url, data=json.dumps(first_pass_command_data), headers={"worker": _get_hostname()})
+        _run_ffmpeg_command(
+            analyze_command, frame_count=file_info.frames, file_name=input_file.name,
+            callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
+            detail_url=detail_url
+        )
+
+        # Second pass
+        requests.post(detail_url, data=json.dumps(second_pass_command_data), headers={"worker": _get_hostname()})
         _run_ffmpeg_command(
             encode_command, frame_count=file_info.frames, file_name=input_file.name,
             callback_channel=callback_channel, file_framerate=float(eval(file_info.video_stream["r_frame_rate"])),
@@ -367,12 +366,19 @@ def encode_file(input_file: pathlib.Path, profile: dict, detail_url: str,
     return output_file, encode_type, encode_value
 
 
-def upload_file(url: str, file_path: pathlib.Path, encode_type: str, encode_value: int) -> None:
+def upload_file(url: str, file_path: pathlib.Path,
+                encode_type: typing.Optional[str] = None, encode_value: typing.Optional[int] = None) -> None:
     log.info("Uploading [{}] to [{}]".format(str(file_path), url))
     headers = {
         "worker": _get_hostname(),
         "size": str(file_path.stat().st_size)
     }
+
+    if encode_type:
+        headers["encode_type"] = encode_type
+    if encode_value:
+        headers["encode_value"] = encode_value
+
     while True:
         request = None
         try:
