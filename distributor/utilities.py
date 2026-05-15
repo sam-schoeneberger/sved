@@ -64,7 +64,7 @@ def create_file(file_path: pathlib.Path) -> typing.Optional[distributor.models.F
             frames=file_information.frames,
         )
         if not created:
-            log.debug("[{}] exists in DB as [{}]".format(file_object.name.encode().decode(), file_object.pk))
+            log.debug(f"[{file_object.name.encode().decode()}] exists in DB as [{file_object.pk}]")
         return file_object
     else:
         return None
