@@ -55,6 +55,14 @@ class MetricTask(models.Model):
     class Meta:
         verbose_name = "Metric Task"
 
+    def __get_formatted_url(self, request_key: str, is_secure: bool):
+        request_host = f"{settings.MANAGER_ADDRESS}:8080"
+        url_suffix = reverse(request_key, args=(self.pk,))
+        if is_secure:
+            return f"https://{request_host}{url_suffix}"
+        else:
+            return f"http://{request_host}{url_suffix}"
+
     def get_processing_rate(self, decimal_places: int = 2) -> float:
         return round(float(self.processing_framerate) / float(self.source_file.frame_rate), decimal_places)
 
@@ -65,11 +73,7 @@ class MetricTask(models.Model):
         :param is_secure: whether we're using https or not
         :return: URL serving the metrics task information
         """
-        request_host = "{}:{}".format(settings.MANAGER_ADDRESS, "8080")
-        if is_secure:
-            return "https://{}{}".format(request_host, reverse("metrics:api-task-detail", args=(self.pk,)))
-        else:
-            return "http://{}{}".format(request_host, reverse("metrics:api-task-detail", args=(self.pk,)))
+        return self.__get_formatted_url("metrics:api-task-detail", is_secure)
 
     def get_metrics_task_report_url(self, is_secure: bool = False) -> str:
         """
@@ -78,11 +82,7 @@ class MetricTask(models.Model):
         :param is_secure: whether we're using https or not
         :return: URL serving the metrics report data
         """
-        request_host = "{}:{}".format(settings.MANAGER_ADDRESS, "8080")
-        if is_secure:
-            return "https://{}{}".format(request_host, reverse("metrics:api-task-report", args=(self.pk,)))
-        else:
-            return "http://{}{}".format(request_host, reverse("metrics:api-task-report", args=(self.pk,)))
+        return self.__get_formatted_url("metrics:api-task-report", is_secure)
 
     def get_source_file_url(self, is_secure: bool = False):
         """
@@ -91,11 +91,7 @@ class MetricTask(models.Model):
         :param is_secure: whether we're using https or not
         :return: URL serving the source file
         """
-        request_host = "{}:{}".format(settings.MANAGER_ADDRESS, "8080")
-        if is_secure:
-            return "https://{}{}".format(request_host, reverse("metrics:api-task-source", args=(self.pk,)))
-        else:
-            return "http://{}{}".format(request_host, reverse("metrics:api-task-source", args=(self.pk,)))
+        return self.__get_formatted_url("metrics:api-task-source", is_secure)
 
     def get_compressed_file_url(self, is_secure: bool = False):
         """
@@ -104,11 +100,7 @@ class MetricTask(models.Model):
         :param is_secure: whether we're using https or not
         :return: URL serving the compressed file
         """
-        request_host = "{}:{}".format(settings.MANAGER_ADDRESS, "8080")
-        if is_secure:
-            return "https://{}{}".format(request_host, reverse("metrics:api-task-compressed", args=(self.pk,)))
-        else:
-            return "http://{}{}".format(request_host, reverse("metrics:api-task-compressed", args=(self.pk,)))
+        return self.__get_formatted_url("metrics:api-task-compressed", is_secure)
 
 
 # So we can theoretically calculate all these once we have all the scores.
