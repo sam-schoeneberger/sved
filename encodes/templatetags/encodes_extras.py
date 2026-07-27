@@ -1,4 +1,5 @@
 import datetime
+import math
 import zoneinfo
 
 from django import template
@@ -27,3 +28,19 @@ def profile_id_rename(profile_name: str) -> str:
 @register.simple_tag
 def conversion_rate(file_duration: int, start_time: datetime.datetime, end_time: datetime.datetime) -> str:
     return str(round(float(file_duration) / float((end_time - start_time).seconds), 2))
+
+
+@register.simple_tag
+def encode_rate(original_size: int, compressed_size: int) -> str:
+    return f"{str(round((float(compressed_size) / float(original_size)) * 100.0, 2))}%"
+
+
+@register.simple_tag
+def format_bytes(file_size: int) -> str:
+    if file_size and file_size > 0:
+        size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+        i = int(math.floor(math.log(file_size, 1024)))
+        s = round(file_size / math.pow(1024, i), 2)
+        return "{}{}".format(s, size_name[i])
+    else:
+        return "0B"

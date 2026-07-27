@@ -41,11 +41,15 @@
                     <tr>
                         <th scope="col">ID</th>
                         <th scope="col">File Name</th>
-                        <th scope="col">File Duration</th>
+                        <th scope="col">Codec</th>
                         <th scope="col">Encode Type</th>
                         <th scope="col">Encode Value</th>
+                        <th scope="col">File Duration</th>
                         <th scope="col">Encode Duration</th>
                         <th scope="col">Conversion Rate</th>
+                        <th scope="col">Original Size</th>
+                        <th scope="col">Compressed Size</th>
+                        <th scope="col">Compression Ratio</th>
                         <th scope="col">Worker</th>
                     </tr>
                 </thead>
@@ -54,11 +58,15 @@
                         <tr id="{{ task.id }}_row">
                             <td><code>{{ task.id }}</code></td>
                             <td><code>{{ task.source_file.name }}</code></td>
-                            <td>{{ task.source_file.seconds_to_duration }}</td>
+                            <td><code>{{ task.profile.codec }}</code></td>
                             <td><code>{{ task.encode_type }}</code></td>
                             <td><code>{{ task.encode_value }}</code></td>
+                            <td>{{ task.source_file.seconds_to_duration }}</td>
                             <td>{{ task.encode_start_datetime|datetime_duration:task.encode_end_datetime }}</td>
                             <td><code>{% conversion_rate task.source_file.duration task.encode_start_datetime task.encode_end_datetime %}x</code></td>
+                            <td>{% format_bytes task.source_file.size %}</td>
+                            <td>{% format_bytes task.compressed_file.size %}</td>
+                            <td>{% encode_rate task.source_file.size task.compressed_file.size %}</td>
                             <td>{{ task.worker }}</td>
                         </tr>
                     {% endfor %}
