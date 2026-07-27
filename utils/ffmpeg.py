@@ -160,7 +160,7 @@ def format_ffmpeg_output(ffmpeg_output: typing.List[str], file_framerate: float 
         raise ve
 
 
-def _construct_audio_stream_arguments(audio_streams: typing.List[dict]) -> str:
+def _construct_audio_stream_arguments(audio_streams: typing.List[dict], keep_main_audio_surround: bool = False) -> str:
     # It's never really worth it to keep the original audio because it's so massive.
     # (Audiophiles: I do not care.  You and I are both well aware neither your nor my hearing can tell a difference.)
 
@@ -180,7 +180,8 @@ def _construct_audio_stream_arguments(audio_streams: typing.List[dict]) -> str:
     # nor have I noticed any issues while listening to AAC tracks encoded with ffmpeg's built-in encoder.
     # I'm sure that if I was getting down to 128kb/s, and I was listening on a fine-tuned 5.1 surround system,
     # that I would notice _some_ difference.  But I watch my shows and movies on budget gear and have a
-    # basic 2 channel soundbar for my TV.  96kb/s per channel encoded to AAC sounds fine to me.
+    # basic set of stereo speakers and center channel for my TV.
+    # 96kb/s per channel encoded to AAC sounds fine to me.
 
     # I'm also aware that Opus is superior to AAC at these bitrates.  But considering that Opus cannot be
     # direct played via Plex very often, I'd rather just go with AAC and save the headache.
@@ -233,7 +234,7 @@ def _construct_audio_stream_arguments(audio_streams: typing.List[dict]) -> str:
     main_track_channels = int(audio_streams[0]["channels"])
     main_track_codec = audio_streams[0]["codec_name"]
 
-    if main_track_channels >= 6:
+    if main_track_channels >= 6 and keep_main_audio_surround:
         if main_track_bitrate > 576:
             audio_arguments.append(five_point_one_template.format(0, 0, 0, 0))
         else:
@@ -248,7 +249,7 @@ def _construct_audio_stream_arguments(audio_streams: typing.List[dict]) -> str:
                 audio_arguments.append(stereo_no_gain_template.format(0, 0, 0, 0))
 
     # Compatibility track creation.  This includes the +2db gain for downmixing to stereo for 5.1 (or more) tracks.
-    if main_track_channels > 2:
+    if main_track_channels > 2 and keep_main_audio_surround:
         audio_arguments.append(
             stereo_gain_template.format(
                 0, len(audio_arguments), len(audio_arguments), len(audio_arguments), len(audio_arguments)
@@ -506,10 +507,11 @@ def delete_two_pass_logs(log_directory: pathlib.Path) -> None:
             file.unlink()
 
 
-def create_two_pass_command_by_relative_size(file_path: pathlib.Path, output_path: pathlib.Path = None,
-                                             codec: str = "h264", stream_size: float = None,
-                                             preset: str = "slow",
-                                             tune: str = None) -> typing.Tuple[str, str, pathlib.Path]:
+def create_two_pass_command_relative(file_path: pathlib.Path, output_path: pathlib.Path = None,
+                                     codec: str = "h264", stream_size: float = None,
+                                     preset: str = "slow",
+                                     tune: str = None,
+                                     keep_main_audio_surround: bool = False) -> typing.Tuple[str, str, pathlib.Path]:
     """
     Simple wrapper to get 2-pass commands to encode down to a percentage video stream size rather than
     calculating and providing the bitrate.
@@ -520,6 +522,7 @@ def create_two_pass_command_by_relative_size(file_path: pathlib.Path, output_pat
     :param stream_size: size of encoded video stream relative to source video stream
     :param preset: encoder preset (e.g. slow, medium, veryfast)
     :param tune: encoder tune
+    :param keep_main_audio_surround: whether to keep a version of the first audio stream in 5.1 or only stereo
     :return: Commands necessary to encode a video with two-pass encoding and the path to the output file if run.
     """
     if stream_size:
@@ -529,12 +532,17 @@ def create_two_pass_command_by_relative_size(file_path: pathlib.Path, output_pat
         bitrate = math.floor(compressed_stream_size / file_info.duration)
     else:
         bitrate = get_bitrate_for_scene(file_path)
-    return create_two_pass_command(file_path, output_path, codec, bitrate=bitrate, preset=preset, tune=tune)
+
+    return create_two_pass_command(
+        file_path, output_path, codec, bitrate=bitrate, preset=preset, tune=tune,
+        keep_main_audio_surround=keep_main_audio_surround
+    )
 
 
 def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path = None,
                             codec: str = "h264", bitrate: int = None,
-                            preset: str = "slow", tune: str = None) -> typing.Tuple[str, str, pathlib.Path]:
+                            preset: str = "slow", tune: str = None,
+                            keep_main_audio_surround: bool = False) -> typing.Tuple[str, str, pathlib.Path]:
     """
     Create commands to encode a file with ffmpeg using two-pass encoding.
 
@@ -549,6 +557,7 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
     :param bitrate: average bitrate in kilobits per second
     :param preset: encoder preset (e.g. slow, medium, veryfast)
     :param tune: encoder tune
+    :param keep_main_audio_surround: whether to keep a version of the first audio stream in 5.1 or only stereo
     :return: Commands necessary to encode a video with two-pass encoding and the path to the output file if run.
     """
     mkvtoolnix.add_media_statistics_if_necessary(file_path)
@@ -602,7 +611,9 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
         subtitle_arguments = ""
 
     if file_info.audio_streams:
-        audio_arguments = _construct_audio_stream_arguments(file_info.audio_streams)
+        audio_arguments = _construct_audio_stream_arguments(
+            file_info.audio_streams, keep_main_audio_surround=keep_main_audio_surround
+        )
     else:
         audio_arguments = ""
 
@@ -617,7 +628,7 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
 
 def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None,
                        codec: str = "h264", crf: int = 18, preset: str = "slow",
-                       tune: str = None) -> typing.Tuple[str, pathlib.Path]:
+                       tune: str = None, keep_main_audio_surround: bool = False) -> typing.Tuple[str, pathlib.Path]:
     """
     Create commands to encode a file with ffmpeg using two-pass encoding.
 
@@ -632,6 +643,7 @@ def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None
     :param crf: CRF to encode with
     :param preset: encoder preset (e.g. slow, medium, veryfast)
     :param tune: encoder tune
+    :param keep_main_audio_surround: whether to keep a version of the first audio stream in 5.1 or only stereo
     :return: Commands necessary to encode a video with two-pass encoding and the path to the output file if run.
     """
     mkvtoolnix.add_media_statistics_if_necessary(file_path)
@@ -667,7 +679,9 @@ def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None
         subtitle_arguments = ""
 
     if file_info.audio_streams:
-        audio_arguments = _construct_audio_stream_arguments(file_info.audio_streams)
+        audio_arguments = _construct_audio_stream_arguments(
+            file_info.audio_streams, keep_main_audio_surround=keep_main_audio_surround
+        )
     else:
         audio_arguments = ""
 

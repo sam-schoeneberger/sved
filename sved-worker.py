@@ -377,7 +377,7 @@ def upload_file(url: str, file_path: pathlib.Path,
     if encode_type:
         headers["encode_type"] = encode_type
     if encode_value:
-        headers["encode_value"] = encode_value
+        headers["encode_value"] = str(encode_value)
 
     while True:
         request = None
