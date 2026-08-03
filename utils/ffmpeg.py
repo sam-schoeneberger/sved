@@ -46,6 +46,7 @@ import typing
 
 from utils import log
 from utils import ffprobe
+from utils import mediainfo
 from utils import mkvtoolnix
 
 
@@ -597,8 +598,8 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
     # Video arguments, encoding settings then filters
     second_pass_command_template += " {} {}"
 
-    # Audio & subtitle arguments, output path
-    second_pass_command_template += " {} {} \"{}\""
+    # Audio, subtitle, and attachment arguments, output path
+    second_pass_command_template += " {} {} {} \"{}\""
 
     second_pass_video_stream_arguments = _construct_video_stream_arguments(
         file_path, video_codec, "abr2", bitrate, preset, tune
@@ -606,9 +607,15 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
     filter_arguments = _construct_video_filter_arguments(file_path)
 
     if file_info.subtitle_streams:
-        subtitle_arguments = "-map 0:s -c:s copy -map 0:t"
+        subtitle_arguments = "-map 0:s -c:s copy"
     else:
         subtitle_arguments = ""
+
+    file_media_info = mediainfo.get_media_info(file_path)
+    if file_media_info.attachments:
+        attachment_arguments = "-map 0:t"
+    else:
+        attachment_arguments = ""
 
     if file_info.audio_streams:
         audio_arguments = _construct_audio_stream_arguments(
@@ -620,7 +627,7 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
     second_pass_command = second_pass_command_template.format(
         BASE_FFMPEG_COMMAND, file_path,
         second_pass_video_stream_arguments, filter_arguments,
-        subtitle_arguments, audio_arguments, output_path
+        subtitle_arguments, audio_arguments, attachment_arguments, output_path
     )
 
     return " ".join(first_pass_command.split()), " ".join(second_pass_command.split()), output_path
@@ -666,17 +673,23 @@ def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None
     # Video arguments, encoding settings then filters
     command_template += " {} {}"
 
-    # Audio & subtitle arguments, output path
-    command_template += " {} {} \"{}\""
+    # Audio, subtitle, and attachment arguments, output path
+    command_template += " {} {} {} \"{}\""
 
     # Getting values from here to end
     video_stream_arguments = _construct_video_stream_arguments(file_path, video_codec, "crf", crf, preset, tune)
     video_filter_arguments = _construct_video_filter_arguments(file_path)
 
     if file_info.subtitle_streams:
-        subtitle_arguments = "-map 0:s -c:s copy -map 0:t"
+        subtitle_arguments = "-map 0:s -c:s copy"
     else:
         subtitle_arguments = ""
+
+    file_media_info = mediainfo.get_media_info(file_path)
+    if file_media_info.attachments:
+        attachment_arguments = "-map 0:t"
+    else:
+        attachment_arguments = ""
 
     if file_info.audio_streams:
         audio_arguments = _construct_audio_stream_arguments(
@@ -688,7 +701,7 @@ def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None
     command = command_template.format(
         BASE_FFMPEG_COMMAND, file_path,
         video_stream_arguments, video_filter_arguments,
-        subtitle_arguments, audio_arguments, output_path
+        subtitle_arguments, audio_arguments, attachment_arguments, output_path
     )
 
     return " ".join(command.split()), output_path

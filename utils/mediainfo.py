@@ -28,6 +28,8 @@ class MediaInfoFile:
         thumbnail_ids = [int(x.get("ID", -9999)) for x in self.thumbnail_streams]
         real_video_streams = [x for x in video_streams if int(x.get("ID", -9999)) not in thumbnail_ids]
 
+        self.attachments = self.general_info.get("extra", {}).get("Attachments", "")
+
         if len(real_video_streams) != 1:
             raise RuntimeError(f"Expected 1 video stream; got [{len(real_video_streams)}]")
         else:
