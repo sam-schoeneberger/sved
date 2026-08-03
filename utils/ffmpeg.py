@@ -606,7 +606,7 @@ def create_two_pass_command(file_path: pathlib.Path, output_path: pathlib.Path =
     filter_arguments = _construct_video_filter_arguments(file_path)
 
     if file_info.subtitle_streams:
-        subtitle_arguments = "-map 0:s -c:s copy"
+        subtitle_arguments = "-map 0:s -c:s copy -map 0:t"
     else:
         subtitle_arguments = ""
 
@@ -674,7 +674,7 @@ def create_crf_command(file_path: pathlib.Path, output_path: pathlib.Path = None
     video_filter_arguments = _construct_video_filter_arguments(file_path)
 
     if file_info.subtitle_streams:
-        subtitle_arguments = "-map 0:s -c:s copy"
+        subtitle_arguments = "-map 0:s -c:s copy -map 0:t"
     else:
         subtitle_arguments = ""
 
