@@ -70,7 +70,7 @@ def index(request):
     # Get list of incomplete Jobs
     query = ~Q(status=encodes.models.EncodeTask.TaskStatus.COMPLETE)
     pending_task_files = [x.source_file.name for x in encodes.models.EncodeTask.objects.filter(query)]
-    log.debug("Found [{}] queued encode tasks in DB".format(len(pending_task_files)))
+    log.debug(f"Found [{len(pending_task_files)}] queued encode tasks in DB")
 
     # Check if any pending jobs have the same file name as the scanned files
     # If so, don't show them to the user.  If not, then show them to the user so they can scan
@@ -81,7 +81,7 @@ def index(request):
         if file.name not in pending_task_files and file.name not in [x.name for x in output_files]:
             files_to_scan.append(file)
 
-    log.debug("Scanning [{}] files not already queued".format(len(files_to_scan)))
+    log.debug(f"Scanning [{len(files_to_scan)}] files not already queued")
 
     files_information = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
