@@ -197,7 +197,8 @@ def _encode_file_crf(input_file: pathlib.Path, output_file: pathlib.Path,
     encode_command, output_file = ffmpeg.create_crf_command(
         input_file, output_path=output_file,
         codec=profile["codec"], crf=crf,
-        preset=profile["encoder_preset"], tune=profile.get("encoder_tune", None)
+        preset=profile["encoder_preset"], tune=profile.get("encoder_tune", None),
+        keep_main_audio_surround=profile["keep_original_main_audio"]
     )
 
     data = {
@@ -236,7 +237,8 @@ def _encode_file_two_pass(input_file: pathlib.Path, output_file: pathlib.Path,
     analyze_command, encode_command, output_file = ffmpeg.create_two_pass_command(
         input_file, output_path=output_file,
         codec=profile["codec"], bitrate=file_bitrate,
-        preset=profile["encoder_preset"], tune=profile.get("encoder_tune", None)
+        preset=profile["encoder_preset"], tune=profile.get("encoder_tune", None),
+        keep_main_audio_surround=profile["keep_original_main_audio"]
     )
 
     first_pass_command_data = {
