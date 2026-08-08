@@ -42,6 +42,8 @@ def create_file(file_path: pathlib.Path) -> typing.Optional[distributor.models.F
     mkvtoolnix.add_media_statistics_if_necessary(file_path)
     file_information = ffprobe.get_file_info(file_path)
 
+    # TODO: fix bug where we're creating files with codec "hevc" AND "h265".
+    # Probably needs to be fixed in the Profile information.
     file_matches = distributor.models.File.objects.filter(
         name=file_path.name, directory=str(file_path.parent), codec=file_information.video_stream["codec_name"]
     )
